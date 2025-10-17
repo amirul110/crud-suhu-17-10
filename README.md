@@ -1,3 +1,37 @@
+i B – Gunakan Git Hooks (lebih “profesional”)
+
+Buat file hook otomatis di .git/hooks/:
+
+Buka terminal di root proyek.
+
+Jalankan:
+
+cd .git/hooks
+
+
+Buat file bernama post-commit:
+
+nano post-commit
+
+
+Isi dengan:
+
+#!/bin/bash
+git push origin main
+
+
+Simpan dan beri izin eksekusi:
+
+chmod +x post-commit
+
+
+Sekarang setiap kamu commit (manual), Git otomatis push ke GitHub setelahnya.
+Kalau mau auto-commit juga setiap perubahan file, bisa kombinasikan dengan cron job atau watch script.
+
+
+
+
+untuk simpan rekam kode
 buat file auto-scync.ps1
 # auto-sync.ps1
 param(
