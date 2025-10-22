@@ -1,7 +1,18 @@
 param([string]$Message = "auto sync")
 
-git add -A git commit -m $Message
+# Tambahkan semua perubahan
+git add -A
 
-Write-Host "🔄 Sinkronisasi dengan GitHub..." git fetch origin git rebase origin/main
+# Commit dengan pesan dari parameter
+git commit -m $Message
 
-Write-Host "✅ Commit selesai — otomatis push ke GitHub..." git push origin main --force-with-lease
+# Info ke user
+Write-Host "🔄 Sinkronisasi dengan GitHub..."
+
+# Ambil update dari remote dan lakukan rebase
+git fetch origin
+git rebase origin/main
+
+# Push ke GitHub
+Write-Host "Commit selesai - otomatis push ke GitHub..."
+git push origin main --force-with-lease
