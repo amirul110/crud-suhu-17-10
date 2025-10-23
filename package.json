@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "jose": "^6.1.0",
     "knex": "^3.1.0",
     "mysql2": "^3.15.3"
   }
