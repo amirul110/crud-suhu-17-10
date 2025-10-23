@@ -21,6 +21,7 @@ interface UserFormData {
 const UserPage = () => {
     const toastRef = useRef<ToastNotifierHandle>(null);
     const [users, setUsers] = useState<User[]>([]);
+    const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
     const [addDialog, setAddDialog] = useState<boolean>(false);
@@ -33,6 +34,11 @@ const UserPage = () => {
         password: '',
         role: ''
     });
+
+    // State untuk filter
+    const [filterNama, setFilterNama] = useState<string>('');
+    const [filterEmail, setFilterEmail] = useState<string>('');
+    const [isSearching, setIsSearching] = useState<boolean>(false);
 
     const roleOptions = [
         { label: 'Admin', value: 'admin' },
@@ -80,9 +86,12 @@ const UserPage = () => {
             
             console.log('👥 Extracted users:', usersData);
             setUsers(usersData);
+            setFilteredUsers(usersData);
             
             if (usersData.length === 0) {
                 toastRef.current?.showToast('info', 'Tidak ada data user');
+            } else {
+                toastRef.current?.showToast('00', `Berhasil memuat ${usersData.length} data user`);
             }
             
         } catch (err) {
@@ -91,6 +100,57 @@ const UserPage = () => {
             toastRef.current?.showToast('99', errorMessage);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // Fungsi untuk melakukan pencarian
+    const handleSearch = () => {
+        setIsSearching(true);
+        
+        // Jika kedua filter kosong, tampilkan semua data
+        if (!filterNama.trim() && !filterEmail.trim()) {
+            setFilteredUsers(users);
+            if (users.length === 0) {
+                toastRef.current?.showToast('01', 'Tidak ada data user');
+            } else {
+                toastRef.current?.showToast('00', `Menampilkan semua ${users.length} data user`);
+            }
+            setIsSearching(false);
+            return;
+        }
+
+        // Filter data berdasarkan nama dan/atau email
+        const filtered = users.filter(item => {
+            const matchNama = filterNama.trim() 
+                ? item.name?.toLowerCase().includes(filterNama.toLowerCase())
+                : true;
+            
+            const matchEmail = filterEmail.trim()
+                ? item.email?.toLowerCase().includes(filterEmail.toLowerCase())
+                : true;
+
+            return matchNama && matchEmail;
+        });
+
+        setFilteredUsers(filtered);
+        
+        // Tampilkan pesan hasil pencarian
+        if (filtered.length === 0) {
+            toastRef.current?.showToast('01', 'Data user tidak ditemukan dengan filter yang diberikan');
+        } else {
+            toastRef.current?.showToast('00', `Ditemukan ${filtered.length} data user`);
+        }
+        
+        setIsSearching(false);
+    };
+
+    // Fungsi untuk reset filter
+    const handleResetFilter = () => {
+        setFilterNama('');
+        setFilterEmail('');
+        setFilteredUsers(users);
+        if (users.length > 0) {
+            toastRef.current?.showToast('00', `Menampilkan semua ${users.length} data user`);
         }
     };
 
@@ -143,49 +203,49 @@ const UserPage = () => {
         }
     };
 
-const handleEditUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUser) return;
+    const handleEditUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedUser) return;
 
-    try {
-        console.log('✏️ Updating user ID:', selectedUser.id);
-        
-        const updateData = {
-            name: formData.name,
-            email: formData.email,
-            role: formData.role,
-            ...(formData.password && { password: formData.password })
-        };
+        try {
+            console.log('✏️ Updating user ID:', selectedUser.id);
+            
+            const updateData = {
+                name: formData.name,
+                email: formData.email,
+                role: formData.role,
+                ...(formData.password && { password: formData.password })
+            };
 
-        const res = await fetch(`/api/users/${selectedUser.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(updateData)
-        });
+            const res = await fetch(`/api/users/${selectedUser.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updateData)
+            });
 
-        const json = await res.json();
-        
-        if (!res.ok) {
-            // Gunakan message dari backend jika ada
-            const errorMessage = json.data?.message || 'Gagal mengupdate user';
-            throw new Error(errorMessage);
+            const json = await res.json();
+            
+            if (!res.ok) {
+                const errorMessage = json.data?.message || 'Gagal mengupdate user';
+                throw new Error(errorMessage);
+            }
+
+            if (json.data?.status === '00') {
+                toastRef.current?.showToast('00', json.data?.message || 'User berhasil diupdate');
+                setEditDialog(false);
+                resetForm();
+                fetchUsers();
+            } else {
+                throw new Error(json.data?.message || 'Gagal update user');
+            }
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan';
+            toastRef.current?.showToast('99', errorMessage);
         }
+    };
 
-        if (json.data?.status === '00') {
-            toastRef.current?.showToast('00', json.data?.message || 'User berhasil diupdate');
-            setEditDialog(false);
-            resetForm();
-            fetchUsers();
-        } else {
-            throw new Error(json.data?.message || 'Gagal update user');
-        }
-    } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan';
-        toastRef.current?.showToast('99', errorMessage);
-    }
-};
     const handleDeleteUser = async (user: User) => {
         confirmDialog({
             message: `Yakin ingin menghapus user "${user.name}"?`,
@@ -231,69 +291,152 @@ const handleEditUser = async (e: React.FormEvent) => {
         setEditDialog(true);
     };
 
+    // Handle enter key pada input filter
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSearch();
+        }
+    };
+
     useEffect(() => {
         fetchUsers();
     }, []);
 
     return (
-        <div className="card">
-            <h3 className="text-xl font-semibold">Master User</h3>
+        <div className="card p-4">
+            {/* Header seperti Master Mesin */}
+            <div className="flex justify-content-between align-items-center mb-4">
+                <h1 className="text-2xl font-bold text-gray-800">Master Data User</h1>
+                <div className="flex gap-2">
+                    
+                </div>
+            </div>
 
-            <div className="flex justify-content-between items-center my-3">
-                <Button 
-                    label="Refresh" 
-                    icon="pi pi-refresh" 
-                    className="text-sm p-button-outlined"
-                    onClick={fetchUsers}
-                    loading={isLoading}
-                />
-                <Button 
-                    label="Tambah User" 
-                    icon="pi pi-plus" 
-                    className="text-sm" 
+            {/* Filter Section seperti Master Mesin */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="field">
+                    <label htmlFor="nama-user" className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama User
+                    </label>
+                    <InputText 
+                        id="nama-user"
+                        value={filterNama}
+                        onChange={(e) => setFilterNama(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Cari nama user..." 
+                        className="w-full"
+                    />
+                </div>
+                <div className="field">
+                    <label htmlFor="email-user" className="block text-sm font-medium text-gray-700 mb-2">
+                        Email
+                    </label>
+                    <InputText 
+                        id="email-user"
+                        value={filterEmail}
+                        onChange={(e) => setFilterEmail(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Cari email..." 
+                        className="w-full"
+                    />
+                </div>
+                <div className="field flex items-end gap-2">
+                    <Button 
+                        label="Cari" 
+                        icon="pi pi-search" 
+                        className="p-button-primary w-full"
+                        onClick={handleSearch}
+                        loading={isSearching}
+                    />
+                    <Button 
+                        label="Reset" 
+                        icon="pi pi-refresh" 
+                        className="p-button-secondary w-full"
+                        onClick={handleResetFilter}
+                        severity="help"
+                    />
+                </div>
+            </div>
+
+            {/* Action Button seperti Master Mesin */}
+            <div className="flex justify-content-between align-items-center my-4">
+                <div className="text-sm text-gray-600">
+                    {filteredUsers.length > 0 ? (
+                        `Menampilkan ${filteredUsers.length} dari ${users.length} user`
+                    ) : (
+                        'Tidak ada data user'
+                    )}
+                </div>
+                <Button
+                    label="Tambah User"
+                    icon="pi pi-plus"
                     onClick={() => {
                         resetForm();
                         setAddDialog(true);
-                    }} 
+                    }}
+                    className="p-button-success"
                 />
             </div>
 
+            {/* Data Table seperti Master Mesin */}
             <DataTable 
-                size="small" 
-                className="text-sm" 
-                value={users} 
+                value={filteredUsers} 
                 paginator 
-                rows={10} 
-                loading={isLoading} 
+                rows={10}
+                rowsPerPageOptions={[5, 10, 20, 50]}
+                loading={isLoading}
                 scrollable
-                emptyMessage="Tidak ada data user"
+                scrollHeight="flex"
+                emptyMessage="Tidak ada data user yang sesuai dengan filter"
+                className="shadow-sm"
+                size="small"
             >
-                <Column field="name" header="Nama User" filter sortable />
-                <Column field="email" header="Email" filter sortable />
-                <Column field="role" header="Role" filter sortable />
+                <Column 
+                    field="name" 
+                    header="Nama User" 
+                    sortable 
+                    style={{ minWidth: '200px' }}
+                />
+                <Column 
+                    field="email" 
+                    header="Email" 
+                    sortable 
+                    style={{ minWidth: '250px' }}
+                />
+                <Column 
+                    field="role" 
+                    header="Role" 
+                    sortable
+                    style={{ minWidth: '120px' }}
+                />
+                <Column 
+                    header="Status"
+                    body={() => (
+                        <span className="p-tag p-tag-success">Aktif</span>
+                    )}
+                    style={{ minWidth: '100px' }}
+                />
                 <Column
                     header="Aksi"
                     body={(row: User) => (
-                        <div className="flex gap-2">
-                            <Button 
-                                icon="pi pi-pencil" 
-                                size="small" 
-                                severity="warning" 
-                                tooltip="Edit User"
+                        <div className="flex gap-1">
+                            <Button
+                                icon="pi pi-pencil"
+                                className="p-button-warning p-button-sm"
+                                tooltip="Edit"
                                 tooltipOptions={{ position: 'top' }}
-                                onClick={() => setupEditForm(row)} 
+                                onClick={() => setupEditForm(row)}
                             />
-                            <Button 
-                                icon="pi pi-trash" 
-                                size="small" 
-                                severity="danger" 
-                                tooltip="Hapus User"
+                            <Button
+                                icon="pi pi-trash"
+                                className="p-button-danger p-button-sm"
+                                tooltip="Hapus"
                                 tooltipOptions={{ position: 'top' }}
-                                onClick={() => handleDeleteUser(row)} 
+                                onClick={() => handleDeleteUser(row)}
                             />
                         </div>
                     )}
-                    style={{ width: '120px' }}
+                    style={{ width: '100px' }}
                 />
             </DataTable>
 

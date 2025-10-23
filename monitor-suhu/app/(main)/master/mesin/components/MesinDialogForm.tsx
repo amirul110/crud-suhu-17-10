@@ -1,77 +1,121 @@
 'use client';
 
-import { Mesin } from '@/types/mesin';
-import { ErrorMessage, Form, Formik } from 'formik';
-import { Button } from 'primereact/button';
+import { useEffect, useState } from 'react';
 import { Dialog } from 'primereact/dialog';
-import { InputNumber } from 'primereact/inputnumber';
 import { InputText } from 'primereact/inputtext';
-import * as Yup from 'yup';
+import { InputNumber } from 'primereact/inputnumber';
+import { Button } from 'primereact/button';
+import { Mesin } from '@/types/mesin';
 
-type Props = {
+interface MesinDialogFormProps {
     visible: boolean;
     mode: 'add' | 'edit' | null;
-    initialData?: Mesin | null;
+    initialData: Mesin | null;
     onHide: () => void;
     onSubmit: (data: Mesin) => void;
-};
+}
 
-const defaultValues: Mesin = {
-    kode_mesin: '',
-    nama_mesin: '',
-    suhu_maksimal: 0
-};
+const MesinDialogForm = ({ visible, mode, initialData, onHide, onSubmit }: MesinDialogFormProps) => {
+    const [formData, setFormData] = useState<Partial<Mesin>>({
+        kode_mesin: '',
+        nama_mesin: '',
+        suhu_maksimal: 0
+    });
 
-const validationSchema = Yup.object({
-    kode_mesin: Yup.string().required('Kode Mesin wajib diisi'),
-    nama_mesin: Yup.string().required('Nama Mesin wajib diisi'),
-    suhu_maksimal: Yup.number().typeError('Suhu harus berupa angka').required('Suhu Maksimal wajib diisi')
-});
+    useEffect(() => {
+        if (mode === 'edit' && initialData) {
+            setFormData(initialData);
+        } else {
+            setFormData({
+                kode_mesin: '',
+                nama_mesin: '',
+                suhu_maksimal: 0
+            });
+        }
+    }, [mode, initialData, visible]);
 
-const MesinDialogForm = ({ visible, mode, initialData, onHide, onSubmit }: Props) => {
-    const isEdit = mode === 'edit';
-    const title = isEdit ? `Edit Data ${initialData?.kode_mesin}` : 'Tambah Data Master Mesin';
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (formData.kode_mesin && formData.nama_mesin && formData.suhu_maksimal !== undefined) {
+            onSubmit(formData as Mesin);
+        }
+    };
+
+    const isEditMode = mode === 'edit';
 
     return (
-        <Dialog style={{ minWidth: '70vw' }} header={title} visible={visible} onHide={onHide}>
-            <Formik
-                initialValues={initialData ?? defaultValues}
-                enableReinitialize
-                validationSchema={validationSchema}
-                onSubmit={(values, actions) => {
-                    onSubmit(values);
-                    actions.setSubmitting(false);
-                }}
-            >
-                {({ values, handleChange, setFieldValue, isSubmitting }) => (
-                    <Form>
-                        <div className="mt-3">
-                            <label htmlFor="kode_mesin">Kode Mesin</label>
-                            <InputText id="kode_mesin" name="kode_mesin" className="w-full mt-2" value={values.kode_mesin} onChange={handleChange} disabled={isEdit} />
-                            <ErrorMessage name="kode_mesin" component="small" className="p-error" />
-                        </div>
+        <Dialog 
+            header={isEditMode ? `Edit Data Mesin - ${initialData?.kode_mesin}` : 'Tambah Data Mesin Baru'}
+            visible={visible} 
+            onHide={onHide}
+            style={{ width: '500px' }}
+            modal
+            className="p-fluid"
+        >
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="field">
+                    <label htmlFor="kode_mesin" className="block text-sm font-medium text-gray-700 mb-2">
+                        Kode Mesin <span className="text-red-500">*</span>
+                    </label>
+                    <InputText
+                        id="kode_mesin"
+                        value={formData.kode_mesin}
+                        onChange={(e) => setFormData({ ...formData, kode_mesin: e.target.value })}
+                        placeholder="Masukkan kode mesin"
+                        required
+                        className="w-full"
+                    />
+                </div>
 
-                        <div className="mt-3">
-                            <label htmlFor="nama_mesin">Nama Mesin</label>
-                            <InputText id="nama_mesin" name="nama_mesin" className="w-full mt-2" value={values.nama_mesin} onChange={handleChange} />
-                            <ErrorMessage name="nama_mesin" component="small" className="p-error" />
-                        </div>
+                <div className="field">
+                    <label htmlFor="nama_mesin" className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Mesin <span className="text-red-500">*</span>
+                    </label>
+                    <InputText
+                        id="nama_mesin"
+                        value={formData.nama_mesin}
+                        onChange={(e) => setFormData({ ...formData, nama_mesin: e.target.value })}
+                        placeholder="Masukkan nama mesin"
+                        required
+                        className="w-full"
+                    />
+                </div>
 
-                        <div className="mt-3">
-                            <label htmlFor="suhu_maksimal">Suhu Maksimal</label>
-                            <div className="p-inputgroup mt-2">
-                                <InputNumber id="suhu_maksimal" name="suhu_maksimal" useGrouping={false} value={values.suhu_maksimal} onValueChange={(e) => setFieldValue('suhu_maksimal', e.value ?? 0)} />
-                                <span className="p-inputgroup-addon">°C</span>
-                            </div>
-                            <ErrorMessage name="suhu_maksimal" component="small" className="p-error" />
-                        </div>
+                <div className="field">
+                    <label htmlFor="suhu_maksimal" className="block text-sm font-medium text-gray-700 mb-2">
+                        Suhu Maksimal (°C) <span className="text-red-500">*</span>
+                    </label>
+                    <InputNumber
+                        id="suhu_maksimal"
+                        value={formData.suhu_maksimal}
+                        onValueChange={(e) => setFormData({ ...formData, suhu_maksimal: e.value || 0 })}
+                        placeholder="Masukkan suhu maksimal"
+                        mode="decimal"
+                        min={0}
+                        max={1000}
+                        useGrouping={false}
+                        required
+                        className="w-full"
+                    />
+                </div>
 
-                        <div className="flex justify-content-end gap-2 mt-3">
-                            <Button label={isEdit ? 'Update' : 'Simpan'} icon="pi pi-save" type="submit" severity="success" disabled={isSubmitting} />
-                        </div>
-                    </Form>
-                )}
-            </Formik>
+                <div className="flex justify-content-end gap-2 mt-6">
+                    <Button
+                        type="button"
+                        label="Batal"
+                        icon="pi pi-times"
+                        onClick={onHide}
+                        className="p-button-text"
+                    />
+                    <Button
+                        type="submit"
+                        label={isEditMode ? 'Update' : 'Simpan'}
+                        icon={isEditMode ? 'pi pi-check' : 'pi pi-save'}
+                        className="p-button-success"
+                    />
+                </div>
+            </form>
         </Dialog>
     );
 };

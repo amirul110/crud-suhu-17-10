@@ -19,9 +19,15 @@ const MesinPage = () => {
     const [deleteDialog, setDeleteDialog] = useState<boolean>(false);
 
     const [mesin, setMesin] = useState<Mesin[]>([]);
+    const [filteredMesin, setFilteredMesin] = useState<Mesin[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [selectedMesin, setSelectedMesin] = useState<Mesin | null>(null);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit' | null>(null);
+    
+    // State untuk filter
+    const [filterKode, setFilterKode] = useState<string>('');
+    const [filterNama, setFilterNama] = useState<string>('');
+    const [isSearching, setIsSearching] = useState<boolean>(false);
 
     const fetchMesin = async () => {
         setIsLoading(true);
@@ -37,8 +43,12 @@ const MesinPage = () => {
 
             // Periksa apakah body ada dan memiliki status
             if (body && body.status === '00') {
-                toastRef.current?.showToast(body.status, body.message);
-                setMesin(body.master_mesin || []);
+                const mesinData = body.master_mesin || [];
+                setMesin(mesinData);
+                setFilteredMesin(mesinData); // Set filtered data sama dengan semua data awal
+                if (mesinData.length > 0) {
+                    toastRef.current?.showToast(body.status, `Berhasil memuat ${mesinData.length} data mesin`);
+                }
             } else {
                 const errorMessage = body?.message || 'Response tidak valid dari server';
                 const errorStatus = body?.status || '99';
@@ -52,112 +62,147 @@ const MesinPage = () => {
         }
     };
 
-const handleSubmit = async (data: Mesin) => {
-    try {
-        console.log('🔄 Mulai submit data mesin...');
-        console.log('📝 Dialog mode:', dialogMode);
-        console.log('🎯 Data yang dikirim:', data);
-
-        // Validasi data sebelum dikirim
-        if (!data.kode_mesin || !data.nama_mesin || data.suhu_maksimal === undefined) {
-            toastRef.current?.showToast('01', 'Harap isi semua field yang required');
+    // Fungsi untuk melakukan pencarian
+    const handleSearch = () => {
+        setIsSearching(true);
+        
+        // Jika kedua filter kosong, tampilkan semua data
+        if (!filterKode.trim() && !filterNama.trim()) {
+            setFilteredMesin(mesin);
+            if (mesin.length === 0) {
+                toastRef.current?.showToast('01', 'Tidak ada data mesin');
+            } else {
+                toastRef.current?.showToast('00', `Menampilkan semua ${mesin.length} data mesin`);
+            }
+            setIsSearching(false);
             return;
         }
 
-        let response;
-        let url = '/api/mesin';
-        let method = 'POST';
+        // Filter data berdasarkan kode dan/atau nama
+        const filtered = mesin.filter(item => {
+            const matchKode = filterKode.trim() 
+                ? item.kode_mesin?.toLowerCase().includes(filterKode.toLowerCase())
+                : true;
+            
+            const matchNama = filterNama.trim()
+                ? item.nama_mesin?.toLowerCase().includes(filterNama.toLowerCase())
+                : true;
 
-        if (dialogMode === 'edit' && selectedMesin) {
-            url = `/api/mesin/${selectedMesin.id}`;
-            method = 'PUT';
-            console.log('✏️ Mode edit - ID:', selectedMesin.id);
-        }
-
-        console.log('🌐 Request ke:', { url, method });
-
-        response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                kode_mesin: data.kode_mesin,
-                nama_mesin: data.nama_mesin,
-                suhu_maksimal: data.suhu_maksimal
-            })
+            return matchKode && matchNama;
         });
 
-        console.log('📨 HTTP Status:', response.status, response.statusText);
-
-        const responseText = await response.text();
-        console.log('📦 Response text:', responseText);
-
-        // Parse response
-        let json;
-        try {
-            json = JSON.parse(responseText);
-            console.log('📦 Parsed JSON:', json);
-        } catch (parseError) {
-            console.error('❌ JSON Parse Error:', parseError);
-            throw new Error('Format response tidak valid dari server');
-        }
-
-        // Validasi struktur response
-        if (!json.data) {
-            console.error('❌ Tidak ada data dalam response:', json);
-            throw new Error('Struktur response tidak valid - data tidak ditemukan');
-        }
-
-        const body = json.data;
-        console.log('🔍 Response body:', body);
-
-        // Handle response berdasarkan status
-        if (body.status === '00' || response.ok) {
-            const successMessage = body.message || 
-                (dialogMode === 'add' ? 'Mesin berhasil ditambahkan' : 'Mesin berhasil diupdate');
-            
-            toastRef.current?.showToast('00', successMessage);
-            console.log('✅ Operasi berhasil:', successMessage);
-            
-            // Update state berdasarkan mode
-            if (dialogMode === 'add') {
-                const newMesin = body.master_mesin || body.data;
-                if (newMesin) {
-                    console.log('➕ Data mesin baru:', newMesin);
-                    setMesin((prev) => [...prev, newMesin]);
-                }
-            } else if (dialogMode === 'edit') {
-                const updatedMesin = body.master_mesin || body.data;
-                if (updatedMesin) {
-                    console.log('✏️ Data mesin updated:', updatedMesin);
-                    setMesin((prev) => prev.map((item) => 
-                        item.id === updatedMesin.id ? updatedMesin : item
-                    ));
-                }
-            }
-            
-            // Refresh data untuk memastikan konsistensi
-            await fetchMesin();
-            
-            // Tutup dialog
-            setDialogMode(null);
-            setSelectedMesin(null);
-            
+        setFilteredMesin(filtered);
+        
+        // Tampilkan pesan hasil pencarian
+        if (filtered.length === 0) {
+            toastRef.current?.showToast('01', 'Data mesin tidak ditemukan dengan filter yang diberikan');
         } else {
-            // Handle error response
-            const errorStatus = body.status || '01';
-            const errorMessage = body.message || 'Terjadi kesalahan tidak diketahui';
-            console.error('❌ Error dari server:', { status: errorStatus, message: errorMessage });
-            toastRef.current?.showToast(errorStatus, errorMessage);
+            toastRef.current?.showToast('00', `Ditemukan ${filtered.length} data mesin`);
         }
+        
+        setIsSearching(false);
+    };
 
-    } catch (err) {
-        console.error('💥 Error dalam handleSubmit:', err);
-        const errorMessage = err instanceof Error ? err.message : 'Gagal terhubung ke server';
-        toastRef.current?.showToast('99', errorMessage);
-    }
-};
+    // Fungsi untuk reset filter
+    const handleResetFilter = () => {
+        setFilterKode('');
+        setFilterNama('');
+        setFilteredMesin(mesin);
+        if (mesin.length > 0) {
+            toastRef.current?.showToast('00', `Menampilkan semua ${mesin.length} data mesin`);
+        }
+    };
+
+    // Handle submit form (tambah/edit)
+    const handleSubmit = async (data: Mesin) => {
+        try {
+            console.log('🔄 Mulai submit data mesin...');
+            console.log('📝 Dialog mode:', dialogMode);
+            console.log('🎯 Data yang dikirim:', data);
+
+            // Validasi data sebelum dikirim
+            if (!data.kode_mesin || !data.nama_mesin || data.suhu_maksimal === undefined) {
+                toastRef.current?.showToast('01', 'Harap isi semua field yang required');
+                return;
+            }
+
+            let response;
+            let url = '/api/mesin';
+            let method = 'POST';
+
+            if (dialogMode === 'edit' && selectedMesin) {
+                url = `/api/mesin/${selectedMesin.id}`;
+                method = 'PUT';
+                console.log('✏️ Mode edit - ID:', selectedMesin.id);
+            }
+
+            console.log('🌐 Request ke:', { url, method });
+
+            response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    kode_mesin: data.kode_mesin,
+                    nama_mesin: data.nama_mesin,
+                    suhu_maksimal: data.suhu_maksimal
+                })
+            });
+
+            console.log('📨 HTTP Status:', response.status, response.statusText);
+
+            const responseText = await response.text();
+            console.log('📦 Response text:', responseText);
+
+            // Parse response
+            let json;
+            try {
+                json = JSON.parse(responseText);
+                console.log('📦 Parsed JSON:', json);
+            } catch (parseError) {
+                console.error('❌ JSON Parse Error:', parseError);
+                throw new Error('Format response tidak valid dari server');
+            }
+
+            // Validasi struktur response
+            if (!json.data) {
+                console.error('❌ Tidak ada data dalam response:', json);
+                throw new Error('Struktur response tidak valid - data tidak ditemukan');
+            }
+
+            const body = json.data;
+            console.log('🔍 Response body:', body);
+
+            // Handle response berdasarkan status
+            if (body.status === '00' || response.ok) {
+                const successMessage = body.message || 
+                    (dialogMode === 'add' ? 'Mesin berhasil ditambahkan' : 'Mesin berhasil diupdate');
+                
+                toastRef.current?.showToast('00', successMessage);
+                console.log('✅ Operasi berhasil:', successMessage);
+                
+                // Refresh data untuk memastikan konsistensi
+                await fetchMesin();
+                
+                // Tutup dialog
+                setDialogMode(null);
+                setSelectedMesin(null);
+                
+            } else {
+                // Handle error response
+                const errorStatus = body.status || '01';
+                const errorMessage = body.message || 'Terjadi kesalahan tidak diketahui';
+                console.error('❌ Error dari server:', { status: errorStatus, message: errorMessage });
+                toastRef.current?.showToast(errorStatus, errorMessage);
+            }
+
+        } catch (err) {
+            console.error('💥 Error dalam handleSubmit:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Gagal terhubung ke server';
+            toastRef.current?.showToast('99', errorMessage);
+        }
+    };
 
     const handleDelete = async (mesinToDelete: Mesin) => {
         try {
@@ -197,7 +242,8 @@ const handleSubmit = async (data: Mesin) => {
 
             if (body.status === '00') {
                 toastRef.current?.showToast(body.status, body.message);
-                setMesin((prev) => prev.filter((item) => item.id !== mesinToDelete.id));
+                // Refresh data setelah hapus
+                await fetchMesin();
             } else {
                 toastRef.current?.showToast(body.status, body.message);
             }
@@ -209,15 +255,82 @@ const handleSubmit = async (data: Mesin) => {
         }
     };
 
+    // Handle enter key pada input filter
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSearch();
+        }
+    };
+
     useEffect(() => {
         fetchMesin();
     }, []);
 
     return (
-        <div className="card">
-            <h3 className="text-xl font-semibold">Master Mesin</h3>
+        <div className="card p-4">
+            {/* Header seperti contoh Master Data Pasien */}
+            <div className="flex justify-content-between align-items-center mb-4">
+                <h1 className="text-2xl font-bold text-gray-800">Master Data Mesin</h1>
+                <div className="flex gap-2">
+                   
+                </div>
+            </div>
 
-            <div className="flex justify-content-end my-3">
+            {/* Filter Section */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="field">
+                    <label htmlFor="kode-mesin" className="block text-sm font-medium text-gray-700 mb-2">
+                        Kode Mesin
+                    </label>
+                    <InputText 
+                        id="kode-mesin"
+                        value={filterKode}
+                        onChange={(e) => setFilterKode(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Cari kode mesin..." 
+                        className="w-full"
+                    />
+                </div>
+                <div className="field">
+                    <label htmlFor="nama-mesin" className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Mesin
+                    </label>
+                    <InputText 
+                        id="nama-mesin"
+                        value={filterNama}
+                        onChange={(e) => setFilterNama(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Cari nama mesin..." 
+                        className="w-full"
+                    />
+                </div>
+                <div className="field flex items-end gap-2">
+                    <Button 
+                        label="Cari" 
+                        icon="pi pi-search" 
+                        className="p-button-primary w-full"
+                        onClick={handleSearch}
+                        loading={isSearching}
+                    />
+                    <Button 
+                        label="Reset" 
+                        icon="pi pi-refresh" 
+                        className="p-button-secondary w-full"
+                        onClick={handleResetFilter}
+                        severity="help"
+                    />
+                </div>
+            </div>
+
+            {/* Action Button */}
+            <div className="flex justify-content-between align-items-center my-4">
+                <div className="text-sm text-gray-600">
+                    {filteredMesin.length > 0 ? (
+                        `Menampilkan ${filteredMesin.length} dari ${mesin.length} mesin`
+                    ) : (
+                        'Tidak ada data mesin'
+                    )}
+                </div>
                 <Button
                     label="Tambah Mesin"
                     icon="pi pi-plus"
@@ -225,39 +338,68 @@ const handleSubmit = async (data: Mesin) => {
                         setDialogMode('add');
                         setSelectedMesin(null);
                     }}
+                    className="p-button-success"
                 />
             </div>
 
+            {/* Data Table */}
             <DataTable 
-                size="small" 
-                className="text-sm" 
-                value={mesin} 
+                value={filteredMesin} 
                 paginator 
-                rows={10} 
-                loading={isLoading} 
+                rows={10}
+                rowsPerPageOptions={[5, 10, 20, 50]}
+                loading={isLoading}
                 scrollable
-                emptyMessage="Tidak ada data mesin"
+                scrollHeight="flex"
+                emptyMessage="Tidak ada data mesin yang sesuai dengan filter"
+                className="shadow-sm"
+                size="small"
             >
-                <Column field="kode_mesin" header="Kode Mesin" filter />
-                <Column field="nama_mesin" header="Nama Mesin" filter />
-                <Column header="Suhu Maksimal" field="suhu_maksimal" body={(row) => `${row.suhu_maksimal}°C`} />
+                <Column 
+                    field="kode_mesin" 
+                    header="Kode Mesin" 
+                    sortable 
+                    style={{ minWidth: '120px' }}
+                />
+                <Column 
+                    field="nama_mesin" 
+                    header="Nama Mesin" 
+                    sortable 
+                    style={{ minWidth: '200px' }}
+                />
+                <Column 
+                    field="suhu_maksimal" 
+                    header="Suhu Maksimal" 
+                    sortable
+                    body={(row) => `${row.suhu_maksimal}°C`}
+                    style={{ minWidth: '120px' }}
+                />
+                <Column 
+                    header="Status"
+                    body={() => (
+                        <span className="p-tag p-tag-success">Aktif</span>
+                    )}
+                    style={{ minWidth: '100px' }}
+                />
                 <Column
                     header="Aksi"
                     body={(row: Mesin) => (
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                             <Button
-                                icon="pi pi-pencil text-sm"
-                                size="small"
-                                severity="warning"
+                                icon="pi pi-pencil"
+                                className="p-button-warning p-button-sm"
+                                tooltip="Edit"
+                                tooltipOptions={{ position: 'top' }}
                                 onClick={() => {
                                     setSelectedMesin(row);
                                     setDialogMode('edit');
                                 }}
                             />
                             <Button
-                                icon="pi pi-trash text-sm"
-                                size="small"
-                                severity="danger"
+                                icon="pi pi-trash"
+                                className="p-button-danger p-button-sm"
+                                tooltip="Hapus"
+                                tooltipOptions={{ position: 'top' }}
                                 onClick={() => {
                                     confirmDialog({
                                         message: `Yakin ingin menghapus mesin "${row.nama_mesin}" (${row.kode_mesin})?`,
@@ -272,61 +414,11 @@ const handleSubmit = async (data: Mesin) => {
                             />
                         </div>
                     )}
-                    style={{ width: '150px' }}
+                    style={{ width: '100px' }}
                 />
             </DataTable>
 
             <ConfirmDialog />
-
-            {/* Dialog untuk edit manual (tidak digunakan jika menggunakan MesinDialogForm) */}
-            <Dialog header={`Update Data ${selectedMesin?.kode_mesin}`} visible={editDialog} onHide={() => setEditDialog(false)}>
-                <form>
-                    <div className="mb-3">
-                        <label htmlFor="kode-mesin">Kode Mesin</label>
-                        <InputText value={selectedMesin?.kode_mesin} type="text" className="w-full mt-3" placeholder="Kode Mesin" />
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="nama-mesin">Nama Mesin</label>
-                        <InputText value={selectedMesin?.nama_mesin} type="text" className="w-full mt-3" placeholder="Nama Mesin" />
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="suhu-maksiaml">Suhu Maksimal Mesin</label>
-                        <div className="p-inputgroup mt-3">
-                            <InputNumber value={selectedMesin?.suhu_maksimal} placeholder="Suhu Maksimal Mesin" useGrouping={false} />
-                            <span className="p-inputgroup-addon">°C</span>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-content-end">
-                        <Button label="Submit" severity="success" icon="pi pi-save" />
-                    </div>
-                </form>
-            </Dialog>
-
-            {/* Dialog untuk tambah manual (tidak digunakan jika menggunakan MesinDialogForm) */}
-            <Dialog header="Tambah Data Master Mesin" visible={addDialog} onHide={() => setAddDialog(false)}>
-                <form>
-                    <div className="mb-3">
-                        <label htmlFor="kode-mesin">Kode Mesin</label>
-                        <InputText type="text" className="w-full mt-3" placeholder="Kode Mesin" />
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="nama-mesin">Nama Mesin</label>
-                        <InputText type="text" className="w-full mt-3" placeholder="Nama Mesin" />
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="suhu-maksiaml">Suhu Maksimal Mesin</label>
-                        <div className="p-inputgroup mt-3">
-                            <InputNumber type="text" placeholder="Suhu Maksimal Mesin" useGrouping={false} />
-                            <span className="p-inputgroup-addon">°C</span>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-content-end">
-                        <Button label="Submit" severity="success" icon="pi pi-save" />
-                    </div>
-                </form>
-            </Dialog>
 
             {/* Komponen form dialog yang sebenarnya digunakan */}
             <MesinDialogForm
