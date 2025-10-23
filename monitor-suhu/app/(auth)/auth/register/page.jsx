@@ -60,7 +60,7 @@ const RegisterPage = () => {
                 <div className="card w-10 h-full md:h-30rem">
                     <div className="grid h-full">
                         {/* Form Section */}
-                        <div className="col-12 md:col-6 flex flex-col justify-center h-full px-4">
+<div className="col-12 md:col-6 flex flex-col justify-center h-full px-6">
                             <h3 className="text-2xl text-center font-semibold mb-5">
                                 {process.env.NEXT_PUBLIC_APP_NAME || 'Monitor Suhu'} - Register
                             </h3>
